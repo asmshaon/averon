@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 import time
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -72,19 +73,21 @@ class Stack:
     def container(self, service: str) -> str:
         return self._compose("ps", "-q", service).stdout.strip()
 
-    def exec_runner(self, args: list[str], timeout: float) -> tuple[dict | None, int, float]:
+    def exec_runner(self, args: list[str], timeout: float) -> tuple[dict | None, int, float, str]:
+        """Returns (result, exit code, wall ms, runner stderr). stderr is only scanned, never stored."""
         t = time.monotonic()
         try:
             p = self._compose("exec", "-T", "ai-runner", "python", *args, check=False, capture=True,
                               timeout=timeout)
-        except subprocess.TimeoutExpired:
-            return None, -1, (time.monotonic() - t) * 1000
+        except subprocess.TimeoutExpired as exc:
+            err = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            return None, -1, (time.monotonic() - t) * 1000, err
         wall = (time.monotonic() - t) * 1000
         lines = [ln for ln in p.stdout.splitlines() if ln.strip().startswith("{")]
         try:
-            return (json.loads(lines[-1]) if lines else None), p.returncode, wall
+            return (json.loads(lines[-1]) if lines else None), p.returncode, wall, p.stderr or ""
         except ValueError:
-            return None, p.returncode, wall
+            return None, p.returncode, wall, p.stderr or ""
 
     def stop(self, service: str) -> None:
         self._compose("stop", service)
@@ -157,12 +160,27 @@ def base_row(e: dict, mode: str) -> dict:
     }
 
 
+MIN_LEAK_CHARS = 4  # shorter strings match log keys/values by chance
+
+
+def log_leaks(stderr: str, texts: list[str | None]) -> int:
+    """Count how many content strings (transcripts, translations) appear in the runner's stderr (criterion C11)."""
+    log = unicodedata.normalize("NFC", stderr or "")
+    found = 0
+    for t in texts:
+        t = unicodedata.normalize("NFC", (t or "").strip())
+        if len(t) >= MIN_LEAK_CHARS and t in log:
+            found += 1
+    return found
+
+
 def run_stt(stack: Stack, e: dict, audio_root: str, timeout: float) -> dict:
     row = base_row(e, "stt")
-    res, code, wall = stack.exec_runner(
+    res, code, wall, err = stack.exec_runner(
         ["-m", "averon_ai.probe_stt", "--audio", f"{audio_root}/{e['audio']}", "--source", row["source_language"]],
         timeout)
-    row.update(harness_wall_ms=round(wall), exit_code=code)
+    row.update(harness_wall_ms=round(wall), exit_code=code,
+               log_leaks=log_leaks(err, [e["reference_transcript"], (res or {}).get("transcription")]))
     if res is None:
         row.update(status="failed", error_code="harness_no_result")
         return row
@@ -186,8 +204,10 @@ def run_turn(stack: Stack, e: dict, mode: str, audio_root: str, timeout: float,
         args += ["--audio", f"{audio_root}/{e['audio']}"]
     if dialect:
         args += ["--dialect", dialect]
-    res, code, wall = stack.exec_runner(args, timeout)
-    row.update(harness_wall_ms=round(wall), exit_code=code)
+    res, code, wall, err = stack.exec_runner(args, timeout)
+    row.update(harness_wall_ms=round(wall), exit_code=code,
+               log_leaks=log_leaks(err, [e["reference_transcript"], (res or {}).get("transcription"),
+                                         (res or {}).get("translation")]))
     if res is None:
         row.update(status="failed", error_code="harness_no_result")
         return row
@@ -259,6 +279,8 @@ def summarize(rows: list[dict], mode: str, label: dict, resources: dict, sizes: 
         "model_file_bytes": sizes,
         "external_api_calls": sum(1 for u in usage if u.get("provider") != "local"),
         "estimated_cost": sum(float(u.get("estimated_cost") or 0) for u in usage),
+        "log_content_leaks": sum(r.get("log_leaks") or 0 for r in rows),
+        "log_leak_utterances": [r["id"] for r in rows if r.get("log_leaks")],
     }
     if mode in ("stt", "e2e"):
         s["stt_quality"] = _quality(rows)
@@ -286,6 +308,9 @@ def summary_markdown(summaries: list[dict], reserve_note: str) -> str:
         if s["error_counts"]:
             out.append(f"- Failures by code: {s['error_counts']}")
         out.append(f"- External API calls: {s['external_api_calls']}; estimated cost: {s['estimated_cost']}")
+        leaks = s.get("log_content_leaks", 0)
+        out.append(f"- Transcript/translation text found in runner logs: {leaks}"
+                   + (f" (**FAIL**, utterances: {', '.join(s['log_leak_utterances'])})" if leaks else " (pass)"))
         out.append("")
         out.append("| Latency (ms) | n | median | p95 | max |")
         out.append("|---|---|---|---|---|")

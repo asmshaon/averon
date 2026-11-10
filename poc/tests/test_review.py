@@ -16,6 +16,8 @@ def _results(tmp_path, kind, n=6):
                 "reference_transcript": f"src {d[:2]} {i}", "translation": None if failed else f"out {d[:2]} {i}",
                 "stt_model": "whisper-secret-model" if kind == "e2e" else None, "llm_model": "llm-secret-model",
                 "variant": "default", "models": {"prompt_version": "bn-BD__ar-SA@v1"},
+                "category": "numbers_prices_dates" if i < 3 else "greetings",
+                "accent": "dhaka" if i % 2 == 0 else "sylhet", "noise": i == 0,
             })
     p = tmp_path / f"{kind}.jsonl"
     p.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
@@ -85,3 +87,31 @@ def test_invalid_answers_reported(tmp_path):
     code = import_reviews.main([str(done / "ar2bn__e2e__revA.csv"), "--key", str(out / "keys" / "key.json"),
                                 "--out", str(tmp_path / "r")])
     assert code == 1
+
+
+def test_slices_for_criteria_c9_c10(tmp_path):
+    out = tmp_path / "review"
+    make_sheets.main(["--e2e", str(_results(tmp_path, "e2e")), "--out", str(out), "--seed", "5"])
+    key = json.loads((out / "keys" / "key.json").read_text())
+    by_row = {k["row_id"]: k for k in key if k["row_id"]}
+    assert all(k["category"] and k["accent"] and k["noise"] is not None for k in key)
+    # slice labels stay in the key only, never on the reviewer sheet
+    sheet = (out / "bn2ar__e2e.csv").read_text(encoding="utf-8-sig")
+    assert "numbers_prices_dates" not in sheet and "dhaka" not in sheet
+    done = tmp_path / "done"
+    done.mkdir()
+    rows = list(csv.DictReader((out / "bn2ar__e2e.csv").open(encoding="utf-8-sig")))
+    # reject exactly the greetings rows; accept the numbers rows
+    bad = {i for i, r in enumerate(rows) if by_row[r["row_id"]]["category"] == "greetings"}
+    _fill(out / "bn2ar__e2e.csv", done / "bn2ar__e2e__revA.csv", lambda i: "N" if i in bad else "Y")
+    reports = tmp_path / "reports"
+    assert import_reviews.main([str(done / "bn2ar__e2e__revA.csv"), "--key", str(out / "keys" / "key.json"),
+                                "--out", str(reports)]) == 0
+    (g,) = [r for r in json.loads((reports / "review.json").read_text()) if r["sheet"] == "bn2ar__e2e"]
+    cat = g["slices"]["category"]
+    # utterances 0-2 numbers (all completed, accepted); 3-4 greetings rejected; 5 failed -> not acceptable
+    assert cat["numbers_prices_dates"] == {"n": 3, "acceptable": 3, "acceptable_rate": 1.0}
+    assert cat["greetings"]["n"] == 3 and cat["greetings"]["acceptable"] == 0
+    assert g["slices"]["noise"]["true"]["n"] == 1
+    assert set(g["slices"]["accent"]) == {"dhaka", "sylhet"}
+    assert "category=numbers_prices_dates | 3 | 3/3 (100%)" in (reports / "review.md").read_text()

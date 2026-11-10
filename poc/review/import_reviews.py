@@ -73,6 +73,7 @@ def aggregate(key: list[dict], reviews: list[dict]) -> list[dict]:
         if not reviewed and not failed:
             continue
         # per utterance: majority of reviewers (ties count as not acceptable)
+        verdicts: list[tuple[dict, bool]] = [(e, False) for e in failed]
         acc_votes = []
         disagreements = 0
         multi = 0
@@ -81,7 +82,9 @@ def aggregate(key: list[dict], reviews: list[dict]) -> list[dict]:
             if len(votes) > 1:
                 multi += 1
                 disagreements += len(set(votes)) > 1
-            acc_votes.append(sum(votes) > len(votes) / 2 if votes else False)
+            ok = sum(votes) > len(votes) / 2 if votes else False
+            acc_votes.append(ok)
+            verdicts.append((e, ok))
         all_r = [r for e in reviewed for r in by_row[e["row_id"]]]
         saudi = [r["sounds_saudi"] for r in all_r if r["sounds_saudi"] is not None]
         total = len(reviewed) + len(failed)
@@ -96,7 +99,24 @@ def aggregate(key: list[dict], reviews: list[dict]) -> list[dict]:
             "fluency_mean": _mean([r["fluency"] for r in all_r]),
             "sounds_saudi_rate": (sum(saudi) / len(saudi)) if saudi else None,
             "reviewer_disagreement_rate": (disagreements / multi) if multi else None,
+            "slices": slices(verdicts),
         })
+    return out
+
+
+SLICE_DIMS = ("category", "accent", "noise")
+
+
+def slices(verdicts: list[tuple[dict, bool]]) -> dict:
+    """Acceptable rate per category / accent / noise group (criteria C9, C10). Failed turns count as not acceptable."""
+    out: dict[str, dict] = {}
+    for dim in SLICE_DIMS:
+        groups: dict[str, list[bool]] = defaultdict(list)
+        for e, ok in verdicts:
+            if e.get(dim) is not None:
+                groups[str(e[dim]).lower()].append(ok)
+        out[dim] = {g: {"n": len(v), "acceptable": sum(v), "acceptable_rate": sum(v) / len(v)}
+                    for g, v in sorted(groups.items())}
     return out
 
 
@@ -120,6 +140,17 @@ def to_markdown(rows: list[dict], problems: list[str]) -> str:
                    f"{_pct(r['acceptable_rate'])} | {_num(r['adequacy_mean'])} | {_num(r['fluency_mean'])} | "
                    f"{_pct(r['sounds_saudi_rate']) if r['direction'] == 'bn-BD>ar-SA' else 'n/a'} | "
                    f"{_pct(r['reviewer_disagreement_rate'])} | {', '.join(r['reviewers'])} |")
+    sliced = [r for r in rows if any(r["slices"].get(d) for d in SLICE_DIMS)]
+    if sliced:
+        out += ["", "## Acceptable rate by slice (criteria C9, C10)", "",
+                "Groups with fewer than 5 utterances are shown but are too small to judge on their own.", "",
+                "| Sheet | Models | Variant | Slice | n | acceptable |", "|---|---|---|---|---|---|"]
+        for r in sliced:
+            models = " + ".join(m for m in (r["stt_model"], r["llm_model"]) if m)
+            for dim in SLICE_DIMS:
+                for g, v in r["slices"].get(dim, {}).items():
+                    out.append(f"| {r['sheet']} | {models} | {r['variant'] or '–'} | {dim}={g} | {v['n']} | "
+                               f"{v['acceptable']}/{v['n']} ({_pct(v['acceptable_rate'])}) |")
     if problems:
         out += ["", "## Import problems", ""] + [f"- {p}" for p in problems]
     return "\n".join(out) + "\n"

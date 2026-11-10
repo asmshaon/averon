@@ -100,6 +100,7 @@ The harness runs on the VPS host and calls the runner via `docker compose exec a
   - Zero OOM kills, and combined inference peak RAM within the D3 budget.
   - Cost = 0.
   - Latency has no fixed threshold. The owner judges median/p95 for conversational usability, and the report proposes a target.
+  - The working list, with definitions, the decision rule and added criteria C9 (numbers/prices/dates), C10 (no weak category/accent/noise slice) and C11 (no content in runner logs), is `poc/reports/criteria.md`. Once the owner confirms it, that file is authoritative.
 
 ### D9. Device TTS check
 A throwaway Expo app (`poc/tts-check`, run in Expo Go, so no native build) uses `expo-speech` `getAvailableVoicesAsync()` to list `bn*`/`ar*` voices and speaks bundled sample translations exported from the end-to-end run. It shows text whenever no voice exists. Results (device, OS, voices, intelligibility verdict) are recorded by hand in the report. It is not the base of the Week 3 app.

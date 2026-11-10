@@ -68,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
                 n = 0
                 for r in subset:
                     entry = {"sheet": name, "direction": direction, "kind": kind, "utterance_id": r["id"],
+                             "category": r.get("category"), "accent": r.get("accent"), "noise": r.get("noise"),
                              "stt_model": r.get("stt_model"), "llm_model": r.get("llm_model"),
                              "variant": r.get("variant"), "prompt_version": (r.get("models") or {}).get("prompt_version"),
                              "status": r["status"], "error_code": r.get("error_code"),
