@@ -21,6 +21,9 @@
 | C6 | Cost | 0 / 0 | … | … | [e2e.md](e2e.md) |
 | C7 | Latency (median / p95) | owner judgement | … | … | [e2e.md](e2e.md) |
 | C8 | Recovery | pass | … | … | [e2e.md](e2e.md) |
+| C9 | Numbers/prices/dates acceptable, per direction | ≥ 85% | … | … | [review.md](review.md) |
+| C10 | Weakest category / accent / noisy group, per direction | ≥ 60% each | … | … | [review.md](review.md), [stt-sweep.md](stt-sweep.md) |
+| C11 | Transcript/translation text in runner logs | 0 matches | … | … | [e2e.md](e2e.md) |
 
 STT quality per language, accent and noise: see [stt-sweep.md](stt-sweep.md). MT comparison: see [mt-sweep.md](mt-sweep.md).
 
