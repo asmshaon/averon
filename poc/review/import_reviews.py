@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Aggregate completed review sheets (task 7.3) into poc/reports/review.md (+ review.json).
+
+  import_reviews.py completed/bn2ar__e2e__reviewerA.csv completed/bn2ar__e2e__reviewerB.csv ...
+
+The file name must start with the sheet name (`bn2ar__e2e`, ...) and end with `__<reviewer>.csv`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPORTS = HERE.parent / "reports"
+
+
+def _yn(v: str) -> bool | None:
+    v = (v or "").strip().lower()
+    return True if v in ("y", "yes", "1", "true") else False if v in ("n", "no", "0", "false") else None
+
+
+def _score(v: str) -> int | None:
+    try:
+        n = int(float((v or "").strip()))
+    except ValueError:
+        return None
+    return n if 1 <= n <= 5 else None
+
+
+def _mean(xs):
+    xs = [x for x in xs if x is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
+def load_reviews(paths: list[Path]) -> tuple[list[dict], list[str]]:
+    reviews, problems = [], []
+    for p in paths:
+        stem = p.stem
+        if "__" not in stem or stem.count("__") < 2:
+            problems.append(f"{p.name}: expected <sheet>__<reviewer>.csv")
+            continue
+        sheet, reviewer = stem.rsplit("__", 1)
+        with p.open(encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                r = {"sheet": sheet, "reviewer": reviewer, "row_id": row.get("row_id"),
+                     "adequacy": _score(row.get("adequacy_1to5", "")),
+                     "fluency": _score(row.get("fluency_1to5", "")),
+                     "acceptable": _yn(row.get("acceptable_Y_N", "")),
+                     "sounds_saudi": _yn(row.get("sounds_saudi_Y_N", "")) if "sounds_saudi_Y_N" in row else None}
+                if r["acceptable"] is None:
+                    problems.append(f"{p.name} {r['row_id']}: missing/invalid acceptable")
+                reviews.append(r)
+    return reviews, problems
+
+
+def aggregate(key: list[dict], reviews: list[dict]) -> list[dict]:
+    by_row: dict[str, list[dict]] = defaultdict(list)
+    for r in reviews:
+        by_row[r["row_id"]].append(r)
+    groups: dict[tuple, list[dict]] = defaultdict(list)
+    for k in key:
+        groups[(k["sheet"], k["direction"], k["kind"], k.get("stt_model"), k.get("llm_model"), k.get("variant"),
+                k.get("prompt_version"))].append(k)
+    out = []
+    for (sheet, direction, kind, stt, llm, variant, prompt), entries in sorted(groups.items(), key=lambda x: str(x[0])):
+        reviewed = [e for e in entries if e["row_id"] and by_row.get(e["row_id"])]
+        failed = [e for e in entries if not e["row_id"]]
+        if not reviewed and not failed:
+            continue
+        # per utterance: majority of reviewers (ties count as not acceptable)
+        acc_votes = []
+        disagreements = 0
+        multi = 0
+        for e in reviewed:
+            votes = [r["acceptable"] for r in by_row[e["row_id"]] if r["acceptable"] is not None]
+            if len(votes) > 1:
+                multi += 1
+                disagreements += len(set(votes)) > 1
+            acc_votes.append(sum(votes) > len(votes) / 2 if votes else False)
+        all_r = [r for e in reviewed for r in by_row[e["row_id"]]]
+        saudi = [r["sounds_saudi"] for r in all_r if r["sounds_saudi"] is not None]
+        total = len(reviewed) + len(failed)
+        out.append({
+            "sheet": sheet, "direction": direction, "kind": kind, "stt_model": stt, "llm_model": llm,
+            "variant": variant, "prompt_version": prompt,
+            "utterances": total, "reviewed": len(reviewed), "failed_turns": len(failed),
+            "reviewers": sorted({r["reviewer"] for r in all_r}),
+            # failed turns count as not acceptable (spec: failures surface, they don't vanish)
+            "acceptable_rate": (sum(acc_votes) / total) if total else None,
+            "adequacy_mean": _mean([r["adequacy"] for r in all_r]),
+            "fluency_mean": _mean([r["fluency"] for r in all_r]),
+            "sounds_saudi_rate": (sum(saudi) / len(saudi)) if saudi else None,
+            "reviewer_disagreement_rate": (disagreements / multi) if multi else None,
+        })
+    return out
+
+
+def _pct(v):
+    return "–" if v is None else f"{v * 100:.0f}%"
+
+
+def _num(v):
+    return "–" if v is None else f"{v:.2f}"
+
+
+def to_markdown(rows: list[dict], problems: list[str]) -> str:
+    out = ["# Native-speaker review", "",
+           "Acceptable rate = utterances judged acceptable by the reviewer majority ÷ all utterances in the group "
+           "(failed turns count as not acceptable; ties count as not acceptable).", "",
+           "| Sheet | Models | Variant | n | failed | acceptable | adequacy | fluency | sounds Saudi | disagreement | reviewers |",
+           "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        models = " + ".join(m for m in (r["stt_model"], r["llm_model"]) if m)
+        out.append(f"| {r['sheet']} | {models} | {r['variant'] or '–'} | {r['utterances']} | {r['failed_turns']} | "
+                   f"{_pct(r['acceptable_rate'])} | {_num(r['adequacy_mean'])} | {_num(r['fluency_mean'])} | "
+                   f"{_pct(r['sounds_saudi_rate']) if r['direction'] == 'bn-BD>ar-SA' else 'n/a'} | "
+                   f"{_pct(r['reviewer_disagreement_rate'])} | {', '.join(r['reviewers'])} |")
+    if problems:
+        out += ["", "## Import problems", ""] + [f"- {p}" for p in problems]
+    return "\n".join(out) + "\n"
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("sheets", type=Path, nargs="+")
+    ap.add_argument("--key", type=Path, default=HERE / "keys" / "key.json")
+    ap.add_argument("--out", type=Path, default=REPORTS)
+    a = ap.parse_args(argv)
+    key = json.loads(a.key.read_text(encoding="utf-8"))
+    reviews, problems = load_reviews(a.sheets)
+    known = {k["row_id"] for k in key if k["row_id"]}
+    problems += [f"unknown row_id {r['row_id']} in sheet {r['sheet']}" for r in reviews if r["row_id"] not in known]
+    rows = aggregate(key, reviews)
+    a.out.mkdir(parents=True, exist_ok=True)
+    (a.out / "review.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+    (a.out / "review.md").write_text(to_markdown(rows, problems), encoding="utf-8")
+    print(to_markdown(rows, problems))
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

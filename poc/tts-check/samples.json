@@ -1,0 +1,9 @@
+{
+  "source": "placeholder: replace with `python3 scripts/export_samples.py <e2e results.jsonl>` after the e2e run (task 6.4)",
+  "samples": [
+    {"id": "placeholder-ar-1", "language": "ar-SA", "text": "وش أخبارك؟ عساك طيب؟"},
+    {"id": "placeholder-ar-2", "language": "ar-SA", "text": "هذا بكم؟ أبغى أروح السوق."},
+    {"id": "placeholder-bn-1", "language": "bn-BD", "text": "আপনি কেমন আছেন?"},
+    {"id": "placeholder-bn-2", "language": "bn-BD", "text": "এটার দাম কত? আমি বাজারে যেতে চাই।"}
+  ]
+}
