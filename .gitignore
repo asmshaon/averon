@@ -1,0 +1,29 @@
+# Model weights and runtime data (live under /opt/averon on the VPS)
+*.gguf
+*.bin
+models/
+poc-data/
+/poc/review/*.csv
+/poc/review/keys/
+/poc/bench/results/
+
+# Audio (recordings are personal data, never committed)
+*.wav
+*.m4a
+*.mp3
+*.ogg
+*.opus
+*.flac
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+.expo/

@@ -1,0 +1,97 @@
+# Averon AI proof-of-concept stack (design D2/D3).
+# - No service publishes a port; the `inference` network is internal (no internet egress either).
+# - Model weights are mounted read-only from ${MODELS_DIR}, outside the repository.
+# - One inference at a time: whisper-server serialises on a mutex, llama-server runs --parallel 1.
+name: averon
+
+services:
+  whisper:
+    build:
+      context: ./whisper
+      args:
+        WHISPER_CPP_TAG: v1.9.5
+    image: averon/whisper-server:v1.9.5
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --model
+      - "/models/${STT_MODEL:?set STT_MODEL in .env}"
+      - --threads
+      - "${INFERENCE_THREADS:-2}"
+    volumes:
+      - ${MODELS_DIR:-/opt/averon/models}:/models:ro
+    networks: [inference]
+    # tini as PID 1: a crashed server exits the container so the restart policy applies (task 2.5).
+    init: true
+    mem_limit: ${WHISPER_MEM_LIMIT:-1536m}
+    memswap_limit: ${WHISPER_MEM_LIMIT:-1536m}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server@sha256:ca40726778c25a7fadce42c09bada8484eab22e28bc283bdbf212e87b1555390
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --model
+      - "/models/${LLM_MODEL:?set LLM_MODEL in .env}"
+      - --alias
+      - "${LLM_MODEL_ID:-translation}"
+      - --threads
+      - "${INFERENCE_THREADS:-2}"
+      - --ctx-size
+      - "${LLM_CTX_SIZE:-2048}"
+      - --parallel
+      - "1"
+      - --jinja
+    volumes:
+      - ${MODELS_DIR:-/opt/averon/models}:/models:ro
+    networks: [inference]
+    init: true
+    mem_limit: ${LLAMA_MEM_LIMIT:-3584m}
+    memswap_limit: ${LLAMA_MEM_LIMIT:-3584m}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+
+  ai-runner:
+    build:
+      context: ../ai
+    image: averon/ai-runner:dev
+    # Long-lived so the benchmark can `docker compose exec` without container start-up cost.
+    command: ["sleep", "infinity"]
+    environment:
+      AVERON_STT_URL: http://whisper:8080
+      AVERON_LLM_URL: http://llama:8080
+      AVERON_STT_MODEL_ID: ${STT_MODEL_ID:-${STT_MODEL}}
+      AVERON_LLM_MODEL_ID: ${LLM_MODEL_ID:-translation}
+      AVERON_STT_TIMEOUT: ${STT_TIMEOUT:-90}
+      AVERON_TRANSLATION_TIMEOUT: ${TRANSLATION_TIMEOUT:-60}
+      AVERON_TOTAL_TIMEOUT: ${TOTAL_TIMEOUT:-180}
+    volumes:
+      - ${POC_DATA_DIR:-/opt/averon/poc-data}:/data:ro
+    tmpfs:
+      - /tmp:size=64m
+    networks: [inference]
+    mem_limit: 256m
+    restart: unless-stopped
+    depends_on:
+      whisper: {condition: service_healthy}
+      llama: {condition: service_healthy}
+
+networks:
+  inference:
+    internal: true
