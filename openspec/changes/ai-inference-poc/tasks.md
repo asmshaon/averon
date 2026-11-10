@@ -36,6 +36,7 @@
 - [x] 5.2 Write `poc/bench/metrics.py`: text normalization (NFC, punctuation/diacritics/tatweel, Arabic letter unification, Bangla digits), CER/WER via jiwer, chrF via sacrebleu, median/p95; verify unit tests on known Bangla and Arabic string pairs
 - [x] 5.3 Write `poc/bench/run_bench.py` with `stt`, `mt` and `e2e` modes (design D7): sequential, swaps models via env plus service restart, writes per-utterance JSONL and a summary (latency per stage, success rate, error counts, peak RAM, external-call count); verify a 5-utterance dry run produces both files
 - [x] 5.4 Add a fault-injection step to the e2e mode (kill a service mid-run); verify the affected turns report `*_unavailable`/`*_timeout` with `retryable: true` and the run continues after the restart
+- [x] 5.5 Capture the runner's stderr in the harness (scanned, never stored) and count transcript/translation text found in it per run (criterion C11); verify a test fails the summary when a fake runner logs a transcript
 
 ## 6. Run evaluation on the VPS
 
@@ -49,6 +50,7 @@
 - [ ] 7.1 Generate blinded, shuffled review CSVs per direction (e2e outputs and reference-transcript outputs) with a separate key file; verify the sheets contain no model or run identifiers
 - [ ] 7.2 Collect the completed sheets from Saudi reviewers (bn→ar) and Bangla reviewers (ar→bn), at least 2 per direction where possible
 - [ ] 7.3 Write and run the import/aggregation script; verify `poc/reports/review.md` shows per-direction acceptable rate, mean adequacy/fluency, sounds-Saudi share and reviewer disagreement
+- [x] 7.4 Carry category/accent/noise into the review key (not the sheets) and report the end-to-end acceptable rate per slice (criteria C9, C10); verify a test checks per-category counts with failed turns counted as not acceptable, and that slice labels never appear on reviewer sheets
 
 ## 8. Device TTS check
 
