@@ -5,10 +5,10 @@ Defines the command-line contract of the Python AI runner, which processes a sin
 ## ADDED Requirements
 
 ### Requirement: Turn invocation inputs
-The runner SHALL accept a turn ID, a source language, a target language, an optional dialect instruction, and exactly one input: either an audio file path or a text input (for translation-only runs). The only supported language codes SHALL be `bn-BD` and `ar-SA`, and the source and target SHALL differ.
+The runner SHALL accept a turn ID, a source language, a target language, an optional dialect instruction, and exactly one input: either an audio file path or a text input (for translation-only runs). The only supported language codes SHALL be `bn-BD` and `ar`, and the source and target SHALL differ.
 
 #### Scenario: Valid audio invocation
-- **WHEN** the runner is invoked with a turn ID, an existing audio path, `--source bn-BD` and `--target ar-SA`
+- **WHEN** the runner is invoked with a turn ID, an existing audio path, `--source bn-BD` and `--target ar`
 - **THEN** it transcribes the audio as Bangla and translates the result into Arabic
 
 #### Scenario: Translation-only invocation
@@ -16,7 +16,7 @@ The runner SHALL accept a turn ID, a source language, a target language, an opti
 - **THEN** it skips speech-to-text and returns a translation of the given text, with the transcription field equal to the input text
 
 #### Scenario: Unsupported language
-- **WHEN** the runner is invoked with a language code other than `bn-BD` or `ar-SA`, or with the same source and target
+- **WHEN** the runner is invoked with a language code other than `bn-BD` or `ar` (including the former `ar-SA`), or with the same source and target
 - **THEN** it exits non-zero with error code `invalid_arguments` and makes no inference call
 
 ### Requirement: Structured JSON result
@@ -59,16 +59,16 @@ Every call to an inference service SHALL have a configurable timeout. If a timeo
 - **WHEN** the translation service does not respond within the configured timeout
 - **THEN** the runner returns `translation_timeout` and exits non-zero no later than shortly after the timeout
 
-### Requirement: Saudi colloquial Arabic is requested explicitly
-When the target language is `ar-SA`, the runner SHALL instruct the translation model to produce natural Saudi colloquial (Najdi/Hijazi everyday) Arabic, not Modern Standard Arabic. When the target is `bn-BD`, it SHALL ask for natural everyday Bangladeshi Bangla. The output SHALL contain only the translation, with no explanations, transliteration or quotes.
+### Requirement: Modern Standard Arabic is requested explicitly
+When the target language is `ar`, the runner SHALL instruct the translation model to produce clear Modern Standard Arabic suitable for everyday conversation, not a regional dialect. When the target is `bn-BD`, it SHALL ask for natural everyday Bangladeshi Bangla. The output SHALL contain only the translation, with no explanations, transliteration or quotes.
 
-#### Scenario: Bangla to Saudi Arabic
-- **WHEN** a Bangla sentence is translated to `ar-SA`
-- **THEN** the request sent to the model includes an explicit Saudi colloquial dialect instruction, and the returned `translation` contains only the translated sentence
+#### Scenario: Bangla to Arabic
+- **WHEN** a Bangla sentence is translated to `ar`
+- **THEN** the request sent to the model includes an explicit Modern Standard Arabic instruction, and the returned `translation` contains only the translated sentence
 
-#### Scenario: Dialect override
-- **WHEN** a dialect instruction is passed on the command line
-- **THEN** it is used in place of the default dialect instruction for that turn
+#### Scenario: Register override
+- **WHEN** a register instruction is passed on the command line (`--dialect`)
+- **THEN** it is used in place of the default Arabic register instruction for that turn
 
 ### Requirement: No content logging
 The runner SHALL NOT write audio bytes, transcriptions or translations to logs or standard error. Logs SHALL contain only turn ID, stage names, timings, model identifiers and error codes. Transcription and translation text SHALL appear only in the standard-output JSON result.

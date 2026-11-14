@@ -70,17 +70,18 @@ Task 2.1 measures the real baseline first. If other apps live on the VPS, the ll
 - **Python 3.12+, standard library only** (`argparse`, `json`, `urllib.request`, `subprocess`, `logging`). The Week 2 Laravel worker image can then embed it with no pip dependencies. ffmpeg/ffprobe are the only system dependencies. Tests use pytest with stdlib `http.server` fakes.
 - **Pipeline:** validate args → `ffprobe` the content (duration, decodability; the file name is ignored) → reject over 30 s or zero-length → `ffmpeg` to 16 kHz mono PCM WAV in a temp dir → STT → empty-check → translate → emit JSON → delete the temp WAV (the input file belongs to the caller).
 - **Output:** one JSON object on stdout (schema in `specs/ai-runner`), plus `retryable` and a `usage[]` array. Exit codes: `0` completed, `2` invalid arguments, `3` non-retryable processing failure, `4` retryable failure. Laravel can then decide on retry from the exit code alone.
+- **Contract version 1.1** (2026-11-14): supported codes are `bn-BD` and `ar`. Version 1.0 used `ar-SA`, which is now rejected as `invalid_arguments`.
 - **Error code to retryable mapping:** `*_unavailable`, `*_timeout` → retryable; everything else → not retryable.
 - **Logging:** stderr only, structured key=value, with turn_id/stage/ms/model/error_code. A unit test asserts that no input or output text reaches stderr.
 - **Timeouts** come from env/flags (defaults: STT 90 s, translation 60 s, total 180 s). They are tuned after the benchmark.
 - **Translation-only mode** (`--text`) lets the benchmark measure MT quality on reference transcripts, isolated from STT errors.
 
-### D6. Prompting for Saudi colloquial Arabic
+### D6. Prompting for Modern Standard Arabic
 - A system prompt per direction is stored as versioned text files in `averon_ai/prompts/`. The prompt version is reported in `models`, so review results trace back to it.
-- bn→ar-SA: "Translate into natural spoken Saudi Arabic as used in everyday conversation in Saudi Arabia (not Modern Standard Arabic). Output only the translation." This comes with 3–5 few-shot pairs containing common Saudi forms (e.g. وش، أبغى، كذا، زين). The few-shot pairs are reviewed by a Saudi speaker before use.
-- ar-SA→bn: natural everyday Bangladeshi Bangla, with numbers, prices and dates preserved.
+- bn→ar: "Translate into clear Modern Standard Arabic (فصحى) that any Arabic speaker understands, in simple everyday wording, not a regional dialect. Output only the translation." This comes with 3–5 few-shot pairs in simple MSA. The few-shot pairs are reviewed by a native Arabic speaker before use.
+- ar→bn: natural everyday Bangladeshi Bangla, with numbers, prices and dates preserved. The Arabic input may be MSA or dialect; the prompt says so.
 - Generation settings: temperature ≈ 0.2, bounded `max_tokens` (≈ 3× input length, capped), stop on newline. Post-processing strips quotes and any `<think>…</think>` block, and model "thinking" modes are disabled.
-- The `--dialect` flag overrides the dialect sentence for prompt-variant experiments (PRD §13: "test prompt variants").
+- The `--dialect` flag overrides the Arabic register sentence for prompt-variant experiments (e.g. strict MSA vs. simple MSA) (PRD §13: "test prompt variants").
 
 ### D7. Benchmark strategy: stage-wise first, then end-to-end
 1. **STT sweep:** every STT candidate over all audio → CER/WER (normalization: Unicode NFC, strip punctuation/diacritics/tatweel, unify Arabic alef/ya/ta-marbuta forms, Bangla digit to Latin digit mapping), per language/accent/noise, plus latency and peak RAM.
@@ -92,10 +93,10 @@ The harness runs on the VPS host and calls the runner via `docker compose exec a
 
 ### D8. Human review
 - Review sheets are CSV files (they open in Google Sheets). Per direction there are two sheets: end-to-end outputs and reference-transcript outputs. Rows are shuffled and the model/run identity is hidden. A separate key file maps rows back.
-- Scoring columns: adequacy 1–5, fluency 1–5, acceptable Y/N, sounds-Saudi Y/N (bn→ar only), and a comment. An import script aggregates the results into the report.
+- Scoring columns: adequacy 1–5, fluency 1–5, acceptable Y/N, standard-Arabic Y/N (bn→ar only), and a comment. An import script aggregates the results into the report.
 - **Proposed decision criteria** (confirmed by the owner before review starts, task 6.1):
   - At least 80% of end-to-end outputs acceptable in each direction.
-  - At least 70% of bn→ar outputs rated "sounds Saudi".
+  - At least 85% of bn→ar outputs rated "standard Arabic".
   - At least 98% of valid-audio turns complete without timeout/internal error.
   - Zero OOM kills, and combined inference peak RAM within the D3 budget.
   - Cost = 0.
@@ -106,12 +107,13 @@ The harness runs on the VPS host and calls the runner via `docker compose exec a
 A throwaway Expo app (`poc/tts-check`, run in Expo Go, so no native build) uses `expo-speech` `getAvailableVoicesAsync()` to list `bn*`/`ar*` voices and speaks bundled sample translations exported from the end-to-end run. It shows text whenever no voice exists. Results (device, OS, voices, intelligibility verdict) are recorded by hand in the report. It is not the base of the Week 3 app.
 
 ### D10. Test-set recording
-Utterances are recorded by consenting native speakers on phones (the same kind of microphone as production), in the m4a/AAC format a phone app will upload, plus some noisy-environment clips. The files live in `/opt/averon/poc-data/audio`. The manifest (scripted prompts plus references) is versioned in git. Reference translations are written or approved by native speakers of the target language.
+Utterances are recorded by consenting native speakers on phones (Arabic speakers from several countries, reading both MSA and dialect prompts) (the same kind of microphone as production), in the m4a/AAC format a phone app will upload, plus some noisy-environment clips. The files live in `/opt/averon/poc-data/audio`. The manifest (scripted prompts plus references) is versioned in git. Reference translations are written or approved by native speakers of the target language.
 
 ## Risks / Trade-offs
 
 - **Weak Bangla STT on base/small** → stretch candidate large-v3-turbo-q5; report per-accent CER; fallback options for the decision report include shorter clips or a ggml-converted Bangla fine-tune (license check required).
-- **LLM outputs MSA instead of Saudi colloquial** → explicit dialect prompt plus Saudi-reviewed few-shot examples, prompt-variant runs via `--dialect`, "sounds Saudi" column as a gate.
+- **LLM mixes dialect into its Arabic, or sounds stiff** → explicit MSA prompt plus native-reviewed few-shot examples, prompt-variant runs via `--dialect`, "standard Arabic" column as a gate (C3).
+- **Arabic STT on dialect speech** → the test set mixes MSA and dialect prompts and reports CER separately, so the decision sees both.
 - **CPU latency too high on 2 vCPU** → quantized models, 2 threads, measure per stage, and set no promise; the decision report may choose "go with conditions" (e.g. shorter max clip).
 - **VPS shared with other apps (unconfirmed)** → measure the baseline before setting limits; shrink candidates; the report records the headroom.
 - **Benchmark disturbs live sites on the same VPS** → run the sweeps off-peak, keep memory limits strict, and run one inference at a time.
