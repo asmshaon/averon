@@ -10,10 +10,10 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-DIRECTIONS = ("bn-BD>ar-SA", "ar-SA>bn-BD")
+DIRECTIONS = ("bn-BD>ar", "ar>bn-BD")
 CATEGORIES = ("greetings", "directions", "shopping", "food_ordering", "workplace", "numbers_prices_dates", "general")
 REQUIRED_CATEGORIES = CATEGORIES[:-1]  # "general" is allowed but not required
-REQUIRED_TAGS = {"bn-BD>ar-SA": {"formal", "informal"}, "ar-SA>bn-BD": {"saudi_colloquial"}}
+REQUIRED_TAGS = {"bn-BD>ar": {"formal", "informal"}, "ar>bn-BD": {"msa", "dialect"}}
 REQUIRED_FIELDS = ("id", "direction", "category", "speaker", "accent", "noise", "audio",
                    "reference_transcript", "reference_translation")
 MAX_SECONDS = 30.0

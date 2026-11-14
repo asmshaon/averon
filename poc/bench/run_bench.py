@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 import time
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -32,7 +33,7 @@ import metrics  # noqa: E402
 from profile import Profiler  # noqa: E402
 
 DEPLOY = REPO / "deploy"
-LANG_OF = {"bn-BD>ar-SA": ("bn-BD", "ar-SA"), "ar-SA>bn-BD": ("ar-SA", "bn-BD")}
+LANG_OF = {"bn-BD>ar": ("bn-BD", "ar"), "ar>bn-BD": ("ar", "bn-BD")}
 
 
 # --------------------------------------------------------------------------- docker helpers
@@ -72,19 +73,21 @@ class Stack:
     def container(self, service: str) -> str:
         return self._compose("ps", "-q", service).stdout.strip()
 
-    def exec_runner(self, args: list[str], timeout: float) -> tuple[dict | None, int, float]:
+    def exec_runner(self, args: list[str], timeout: float) -> tuple[dict | None, int, float, str]:
+        """Returns (result, exit code, wall ms, runner stderr). stderr is only scanned, never stored."""
         t = time.monotonic()
         try:
             p = self._compose("exec", "-T", "ai-runner", "python", *args, check=False, capture=True,
                               timeout=timeout)
-        except subprocess.TimeoutExpired:
-            return None, -1, (time.monotonic() - t) * 1000
+        except subprocess.TimeoutExpired as exc:
+            err = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            return None, -1, (time.monotonic() - t) * 1000, err
         wall = (time.monotonic() - t) * 1000
         lines = [ln for ln in p.stdout.splitlines() if ln.strip().startswith("{")]
         try:
-            return (json.loads(lines[-1]) if lines else None), p.returncode, wall
+            return (json.loads(lines[-1]) if lines else None), p.returncode, wall, p.stderr or ""
         except ValueError:
-            return None, p.returncode, wall
+            return None, p.returncode, wall, p.stderr or ""
 
     def stop(self, service: str) -> None:
         self._compose("stop", service)
@@ -157,12 +160,32 @@ def base_row(e: dict, mode: str) -> dict:
     }
 
 
+MIN_LEAK_CHARS = 4  # shorter strings match log keys/values by chance
+
+
+def log_leaks(stderr: str, texts: list[str | None]) -> int:
+    """Count how many content strings (transcripts, translations) appear in the runner's stderr (criterion C11)."""
+    log = unicodedata.normalize("NFC", stderr or "")
+    found = 0
+    for t in texts:
+        t = unicodedata.normalize("NFC", (t or "").strip())
+        if len(t) >= MIN_LEAK_CHARS and t in log:
+            found += 1
+    return found
+
+
+def dialect_for(e: dict, dialect: str | None) -> str | None:
+    """`--dialect` replaces the Arabic register instruction in the bn→ar prompt; never send it to the ar→bn prompt."""
+    return dialect if e["direction"] == "bn-BD>ar" else None
+
+
 def run_stt(stack: Stack, e: dict, audio_root: str, timeout: float) -> dict:
     row = base_row(e, "stt")
-    res, code, wall = stack.exec_runner(
+    res, code, wall, err = stack.exec_runner(
         ["-m", "averon_ai.probe_stt", "--audio", f"{audio_root}/{e['audio']}", "--source", row["source_language"]],
         timeout)
-    row.update(harness_wall_ms=round(wall), exit_code=code)
+    row.update(harness_wall_ms=round(wall), exit_code=code,
+               log_leaks=log_leaks(err, [e["reference_transcript"], (res or {}).get("transcription")]))
     if res is None:
         row.update(status="failed", error_code="harness_no_result")
         return row
@@ -186,8 +209,10 @@ def run_turn(stack: Stack, e: dict, mode: str, audio_root: str, timeout: float,
         args += ["--audio", f"{audio_root}/{e['audio']}"]
     if dialect:
         args += ["--dialect", dialect]
-    res, code, wall = stack.exec_runner(args, timeout)
-    row.update(harness_wall_ms=round(wall), exit_code=code)
+    res, code, wall, err = stack.exec_runner(args, timeout)
+    row.update(harness_wall_ms=round(wall), exit_code=code,
+               log_leaks=log_leaks(err, [e["reference_transcript"], (res or {}).get("transcription"),
+                                         (res or {}).get("translation")]))
     if res is None:
         row.update(status="failed", error_code="harness_no_result")
         return row
@@ -215,6 +240,12 @@ def _lat(rows: list[dict], key: str) -> dict:
             "max": max(xs) if xs else None}
 
 
+def register_of(row: dict) -> str | None:
+    """Arabic speech register from the manifest tags (`msa` / `dialect`); None for Bangla."""
+    tags = set(row.get("tags") or [])
+    return "msa" if "msa" in tags else "dialect" if "dialect" in tags else None
+
+
 def _quality(rows: list[dict]) -> dict:
     out: dict = {}
     by_lang: dict[str, list[dict]] = defaultdict(list)
@@ -225,10 +256,12 @@ def _quality(rows: list[dict]) -> dict:
         q = {"n_scored": len(scored),
              "cer_mean": metrics.mean([r["cer"] for r in scored]),
              "wer_mean": metrics.mean([r["wer"] for r in scored])}
-        for dim in ("accent", "noise"):
+        for dim in ("accent", "noise", "register"):
             groups: dict[str, list[dict]] = defaultdict(list)
             for r in scored:
-                groups[str(r[dim])].append(r)
+                g = register_of(r) if dim == "register" else str(r[dim])
+                if g is not None:
+                    groups[g].append(r)
             q[f"by_{dim}"] = {g: {"n": len(v), "cer_mean": metrics.mean([x["cer"] for x in v]),
                                   "wer_mean": metrics.mean([x["wer"] for x in v])} for g, v in sorted(groups.items())}
         out[lang] = q
@@ -259,6 +292,8 @@ def summarize(rows: list[dict], mode: str, label: dict, resources: dict, sizes: 
         "model_file_bytes": sizes,
         "external_api_calls": sum(1 for u in usage if u.get("provider") != "local"),
         "estimated_cost": sum(float(u.get("estimated_cost") or 0) for u in usage),
+        "log_content_leaks": sum(r.get("log_leaks") or 0 for r in rows),
+        "log_leak_utterances": [r["id"] for r in rows if r.get("log_leaks")],
     }
     if mode in ("stt", "e2e"):
         s["stt_quality"] = _quality(rows)
@@ -286,6 +321,9 @@ def summary_markdown(summaries: list[dict], reserve_note: str) -> str:
         if s["error_counts"]:
             out.append(f"- Failures by code: {s['error_counts']}")
         out.append(f"- External API calls: {s['external_api_calls']}; estimated cost: {s['estimated_cost']}")
+        leaks = s.get("log_content_leaks", 0)
+        out.append(f"- Transcript/translation text found in runner logs: {leaks}"
+                   + (f" (**FAIL**, utterances: {', '.join(s['log_leak_utterances'])})" if leaks else " (pass)"))
         out.append("")
         out.append("| Latency (ms) | n | median | p95 | max |")
         out.append("|---|---|---|---|---|")
@@ -306,7 +344,7 @@ def summary_markdown(summaries: list[dict], reserve_note: str) -> str:
             out.append("|---|---|---|---|")
             for lang, q in s["stt_quality"].items():
                 out.append(f"| {lang} | {q['n_scored']} | {_fmt(q['cer_mean'], 3)} | {_fmt(q['wer_mean'], 3)} |")
-                for dim in ("by_accent", "by_noise"):
+                for dim in ("by_accent", "by_noise", "by_register"):
                     for g, v in q[dim].items():
                         out.append(f"| ↳ {dim[3:]}={g} | {v['n']} | {_fmt(v['cer_mean'], 3)} | "
                                    f"{_fmt(v['wer_mean'], 3)} |")
@@ -351,6 +389,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="memory reserved for OS + MySQL + PHP-FPM + worker (design D3), for the headroom check")
     ap.add_argument("--host-mem-mib", type=int, default=8192)
     ap.add_argument("--out", type=Path, default=HERE / "results")
+    ap.add_argument("--report-name", help="also write the summary to poc/reports/<NAME>.md "
+                                          "(stt-sweep, mt-sweep, e2e); it holds statistics only, no test text")
     a = ap.parse_args(argv)
 
     env_file = a.env_file if a.env_file.is_file() else None
@@ -392,10 +432,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"== MT {mid} ({f})", flush=True)
                 stack.use(["llama"], LLM_MODEL=f, LLM_MODEL_ID=mid)
                 for vname, dialect in variants.items():
+                    # A dialect instruction only exists for the Arabic target (bn→ar). Non-default variants
+                    # therefore run bn→ar only; ar→bn would just repeat the default prompt.
+                    v_items = items if dialect is None else [e for e in items if e["direction"] == "bn-BD>ar"]
                     rows = []
                     with Profiler({"llama": stack.container("llama")}) as prof:
-                        for e in items:
-                            row = run_turn(stack, e, "mt", a.audio_root, a.timeout, dialect)
+                        for e in v_items:
+                            row = run_turn(stack, e, "mt", a.audio_root, a.timeout, dialect_for(e, dialect))
                             row.update(llm_model=mid, variant=vname)
                             record(rows_file, row)
                             rows.append(row)
@@ -464,6 +507,11 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "summary.json").write_text(json.dumps(summaries, ensure_ascii=False, indent=2), encoding="utf-8")
     (out_dir / "summary.md").write_text(summary_markdown(summaries, reserve_note), encoding="utf-8")
     print(f"\nresults: {results_path}\nsummary: {out_dir / 'summary.md'}")
+    if a.report_name:
+        report = REPO / "poc" / "reports" / f"{a.report_name}.md"
+        report.write_text(f"<!-- generated by run_bench.py, run {run_id} -->\n"
+                          + summary_markdown(summaries, reserve_note), encoding="utf-8")
+        print(f"report: {report}")
     return 0
 
 

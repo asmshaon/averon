@@ -2,7 +2,7 @@ import time
 
 from conftest import BN_TRANSCRIPT
 
-ARGS = ["--turn-id", "s1", "--source", "bn-BD", "--target", "ar-SA"]
+ARGS = ["--turn-id", "s1", "--source", "bn-BD", "--target", "ar"]
 
 
 def test_forced_language_sent(env, run, clips, whisper):
@@ -12,7 +12,7 @@ def test_forced_language_sent(env, run, clips, whisper):
 
 
 def test_arabic_source_forces_ar(env, run, clips, whisper):
-    run("--turn-id", "s2", "--source", "ar-SA", "--target", "bn-BD", "--audio", str(clips["speech_m4a"]))
+    run("--turn-id", "s2", "--source", "ar", "--target", "bn-BD", "--audio", str(clips["speech_m4a"]))
     assert b'name="language"\r\n\r\nar\r\n' in whisper.requests[0]
 
 

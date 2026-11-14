@@ -1,0 +1,5 @@
+{
+  "default": null,
+  "msa-strict": "Use correct, formal Modern Standard Arabic (فصحى) only. Never use dialect words such as وش، أبغى، الحين، عايز، بدي، زين.",
+  "msa-simple": "Use very simple, short Modern Standard Arabic (فصحى) that a non-native listener can follow: common words, short sentences, no dialect words."
+}

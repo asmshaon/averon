@@ -51,7 +51,7 @@ def load_reviews(paths: list[Path]) -> tuple[list[dict], list[str]]:
                      "adequacy": _score(row.get("adequacy_1to5", "")),
                      "fluency": _score(row.get("fluency_1to5", "")),
                      "acceptable": _yn(row.get("acceptable_Y_N", "")),
-                     "sounds_saudi": _yn(row.get("sounds_saudi_Y_N", "")) if "sounds_saudi_Y_N" in row else None}
+                     "standard_arabic": _yn(row.get("standard_arabic_Y_N", "")) if "standard_arabic_Y_N" in row else None}
                 if r["acceptable"] is None:
                     problems.append(f"{p.name} {r['row_id']}: missing/invalid acceptable")
                 reviews.append(r)
@@ -73,6 +73,7 @@ def aggregate(key: list[dict], reviews: list[dict]) -> list[dict]:
         if not reviewed and not failed:
             continue
         # per utterance: majority of reviewers (ties count as not acceptable)
+        verdicts: list[tuple[dict, bool]] = [(e, False) for e in failed]
         acc_votes = []
         disagreements = 0
         multi = 0
@@ -81,9 +82,11 @@ def aggregate(key: list[dict], reviews: list[dict]) -> list[dict]:
             if len(votes) > 1:
                 multi += 1
                 disagreements += len(set(votes)) > 1
-            acc_votes.append(sum(votes) > len(votes) / 2 if votes else False)
+            ok = sum(votes) > len(votes) / 2 if votes else False
+            acc_votes.append(ok)
+            verdicts.append((e, ok))
         all_r = [r for e in reviewed for r in by_row[e["row_id"]]]
-        saudi = [r["sounds_saudi"] for r in all_r if r["sounds_saudi"] is not None]
+        msa = [r["standard_arabic"] for r in all_r if r["standard_arabic"] is not None]
         total = len(reviewed) + len(failed)
         out.append({
             "sheet": sheet, "direction": direction, "kind": kind, "stt_model": stt, "llm_model": llm,
@@ -94,9 +97,26 @@ def aggregate(key: list[dict], reviews: list[dict]) -> list[dict]:
             "acceptable_rate": (sum(acc_votes) / total) if total else None,
             "adequacy_mean": _mean([r["adequacy"] for r in all_r]),
             "fluency_mean": _mean([r["fluency"] for r in all_r]),
-            "sounds_saudi_rate": (sum(saudi) / len(saudi)) if saudi else None,
+            "standard_arabic_rate": (sum(msa) / len(msa)) if msa else None,
             "reviewer_disagreement_rate": (disagreements / multi) if multi else None,
+            "slices": slices(verdicts),
         })
+    return out
+
+
+SLICE_DIMS = ("category", "accent", "noise")
+
+
+def slices(verdicts: list[tuple[dict, bool]]) -> dict:
+    """Acceptable rate per category / accent / noise group (criteria C9, C10). Failed turns count as not acceptable."""
+    out: dict[str, dict] = {}
+    for dim in SLICE_DIMS:
+        groups: dict[str, list[bool]] = defaultdict(list)
+        for e, ok in verdicts:
+            if e.get(dim) is not None:
+                groups[str(e[dim]).lower()].append(ok)
+        out[dim] = {g: {"n": len(v), "acceptable": sum(v), "acceptable_rate": sum(v) / len(v)}
+                    for g, v in sorted(groups.items())}
     return out
 
 
@@ -112,14 +132,25 @@ def to_markdown(rows: list[dict], problems: list[str]) -> str:
     out = ["# Native-speaker review", "",
            "Acceptable rate = utterances judged acceptable by the reviewer majority ÷ all utterances in the group "
            "(failed turns count as not acceptable; ties count as not acceptable).", "",
-           "| Sheet | Models | Variant | n | failed | acceptable | adequacy | fluency | sounds Saudi | disagreement | reviewers |",
+           "| Sheet | Models | Variant | n | failed | acceptable | adequacy | fluency | standard Arabic | disagreement | reviewers |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         models = " + ".join(m for m in (r["stt_model"], r["llm_model"]) if m)
         out.append(f"| {r['sheet']} | {models} | {r['variant'] or '–'} | {r['utterances']} | {r['failed_turns']} | "
                    f"{_pct(r['acceptable_rate'])} | {_num(r['adequacy_mean'])} | {_num(r['fluency_mean'])} | "
-                   f"{_pct(r['sounds_saudi_rate']) if r['direction'] == 'bn-BD>ar-SA' else 'n/a'} | "
+                   f"{_pct(r['standard_arabic_rate']) if r['direction'] == 'bn-BD>ar' else 'n/a'} | "
                    f"{_pct(r['reviewer_disagreement_rate'])} | {', '.join(r['reviewers'])} |")
+    sliced = [r for r in rows if any(r["slices"].get(d) for d in SLICE_DIMS)]
+    if sliced:
+        out += ["", "## Acceptable rate by slice (criteria C9, C10)", "",
+                "Groups with fewer than 5 utterances are shown but are too small to judge on their own.", "",
+                "| Sheet | Models | Variant | Slice | n | acceptable |", "|---|---|---|---|---|---|"]
+        for r in sliced:
+            models = " + ".join(m for m in (r["stt_model"], r["llm_model"]) if m)
+            for dim in SLICE_DIMS:
+                for g, v in r["slices"].get(dim, {}).items():
+                    out.append(f"| {r['sheet']} | {models} | {r['variant'] or '–'} | {dim}={g} | {v['n']} | "
+                               f"{v['acceptable']}/{v['n']} ({_pct(v['acceptable_rate'])}) |")
     if problems:
         out += ["", "## Import problems", ""] + [f"- {p}" for p in problems]
     return "\n".join(out) + "\n"

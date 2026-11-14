@@ -2,7 +2,7 @@
 # Hands-on local testing of the Week 1 PoC stack.
 #
 #   ./try.sh up                          start whisper + llama + runner with small local models
-#   ./try.sh text bn "আমি বাজারে যেতে চাই"   translate typed text (bn = Bangla -> Saudi Arabic, ar = reverse)
+#   ./try.sh text bn "আমি বাজারে যেতে চাই"   translate typed text (bn = Bangla -> Arabic, ar = reverse)
 #   ./try.sh audio bn ~/Downloads/me.m4a  transcribe + translate a recording (phone voice memo, wav, mp3, ...)
 #   ./try.sh crash llama                 kill the llama server and watch it come back
 #   ./try.sh down                        stop everything
@@ -27,9 +27,9 @@ compose() { docker compose --env-file "$ENV_FILE" "$@"; }
 
 lang_pair() {
   case "$1" in
-    bn) echo "--source bn-BD --target ar-SA" ;;
-    ar) echo "--source ar-SA --target bn-BD" ;;
-    *) echo "direction must be bn (Bangla→Saudi Arabic) or ar (Saudi Arabic→Bangla)" >&2; exit 2 ;;
+    bn) echo "--source bn-BD --target ar" ;;
+    ar) echo "--source ar --target bn-BD" ;;
+    *) echo "direction must be bn (Bangla→Arabic) or ar (Arabic→Bangla)" >&2; exit 2 ;;
   esac
 }
 

@@ -18,17 +18,20 @@
 - [x] 3.2 Implement the result/error module: JSON result schema, fixed error-code set, retryable mapping, exit codes 0/2/3/4, guaranteed single JSON object on any exception; verify with unit tests for every error code
 - [x] 3.3 Implement audio handling: probe duration and decodability from content with ffprobe, reject over 30 s and empty audio, convert to 16 kHz mono WAV in a temp dir, delete the temp file afterwards; verify tests with fixture clips (valid m4a, 31 s clip, silent clip, mislabelled non-audio `.wav`)
 - [x] 3.4 Implement the STT client against `whisper-server` with forced language (`bn`/`ar`), timeout, and unavailable/timeout/failed/empty mapping; verify tests against a stdlib fake server for each failure path
-- [ ] 3.5 Write versioned prompt files for bn→ar-SA (Saudi colloquial plus few-shot) and ar-SA→bn (Bangladeshi Bangla), and get the few-shot examples checked by a Saudi speaker; verify a test asserts the ar-SA request contains the Saudi dialect instruction and the `--dialect` override replaces it
+- [ ] 3.5 Write versioned prompt files for bn→ar (Modern Standard Arabic plus few-shot) and ar→bn (Bangladeshi Bangla, input may be MSA or dialect), and get the few-shot examples checked by a native Arabic speaker; verify a test asserts the `ar` request contains the MSA instruction and the `--dialect` override replaces it
 - [x] 3.6 Implement the translation client against llama-server `/v1/chat/completions` (low temperature, bounded max_tokens, thinking disabled, strip quotes and `<think>` blocks, take the first line); verify tests with a fake server for success, timeout, unavailable and output cleanup
 - [x] 3.7 Implement the `usage[]` entries (provider `local`, operation, model, ms, input units, `estimated_cost: 0`) and the prompt version in `models`; verify a test checks the usage on a full fake-server turn
 - [x] 3.8 Add stderr key=value logging with no content; verify a test runs a full turn with debug logging and asserts no transcription or translation text appears in stderr
 - [ ] 3.9 Add the `ai-runner` service (Python 3.12 + ffmpeg, stdlib only) to compose on the internal network; verify on the VPS that `docker compose exec ai-runner python run_turn.py …` on a real Bangla and a real Arabic clip returns `status: completed` with exit 0
+- [x] 3.10 Rename `ar-SA` to `ar` across the runner (codes, prompt file names), PoC tooling (directions, tags, review columns, variants), tests, the TTS app and docs; bump the runner contract to 1.1 and record it in `CLAUDE.md`; verify both test suites pass and `grep -ri 'ar-SA\|saudi'` finds only the change history
 
 ## 4. Test set
 
 - [ ] 4.1 Write the scripted prompt list (≥50 per direction) covering every PRD category, with reference transcripts and native-speaker reference translations, in `poc/testset/manifest.jsonl`; verify it has an entry per required category
 - [x] 4.2 Write `poc/testset/validate_manifest.py` (counts, per-direction minimum, category coverage, references present, audio exists, duration ≤ 30 s via ffprobe); verify it fails on a deliberately broken manifest and passes on the real one
 - [ ] 4.3 Collect consented phone recordings from multiple accents/speakers, including noisy clips, into `/opt/averon/poc-data/audio`; verify `validate_manifest.py` passes against the recordings
+- [x] 4.4 Write `poc/testset/build_manifest.py` (prompt list + recordings sheet → manifest, one entry per recording, refuses prompts without an approved native-speaker reference, `--plan` writes a blank per-language recording sheet); verify tests show AI drafts are rejected and a full build passes `validate_manifest.py`
+- [x] 4.5 Rewrite the prompt list for the new pair: about half of the ar→bn prompts in Modern Standard Arabic and half in everyday dialect (tags `msa` / `dialect`, required by the validator in place of `saudi_colloquial`), and redraft the bn→ar draft translations in MSA; verify the validator's tag rule and the 52/52 coverage
 
 ## 5. Benchmark harness
 
@@ -36,6 +39,9 @@
 - [x] 5.2 Write `poc/bench/metrics.py`: text normalization (NFC, punctuation/diacritics/tatweel, Arabic letter unification, Bangla digits), CER/WER via jiwer, chrF via sacrebleu, median/p95; verify unit tests on known Bangla and Arabic string pairs
 - [x] 5.3 Write `poc/bench/run_bench.py` with `stt`, `mt` and `e2e` modes (design D7): sequential, swaps models via env plus service restart, writes per-utterance JSONL and a summary (latency per stage, success rate, error counts, peak RAM, external-call count); verify a 5-utterance dry run produces both files
 - [x] 5.4 Add a fault-injection step to the e2e mode (kill a service mid-run); verify the affected turns report `*_unavailable`/`*_timeout` with `retryable: true` and the run continues after the restart
+- [x] 5.5 Capture the runner's stderr in the harness (scanned, never stored) and count transcript/translation text found in it per run (criterion C11); verify a test fails the summary when a fake runner logs a transcript
+- [x] 5.6 MT sweep: send `--dialect` variants to bn→ar only (ar→bn has no dialect slot), add `poc/bench/dialect-variants.json`, and add `--report-name` to write each sweep summary to `poc/reports/`; verify tests cover the direction guard and the variants file
+- [x] 5.7 Write `poc/RUNBOOK.md`: the ordered VPS and people steps for sections 2–9 with exact commands; verify every command and path in it matches the scripts' arguments
 
 ## 6. Run evaluation on the VPS
 
@@ -47,8 +53,9 @@
 ## 7. Native-speaker review
 
 - [ ] 7.1 Generate blinded, shuffled review CSVs per direction (e2e outputs and reference-transcript outputs) with a separate key file; verify the sheets contain no model or run identifiers
-- [ ] 7.2 Collect the completed sheets from Saudi reviewers (bn→ar) and Bangla reviewers (ar→bn), at least 2 per direction where possible
-- [ ] 7.3 Write and run the import/aggregation script; verify `poc/reports/review.md` shows per-direction acceptable rate, mean adequacy/fluency, sounds-Saudi share and reviewer disagreement
+- [ ] 7.2 Collect the completed sheets from native Arabic reviewers (bn→ar) and Bangla reviewers (ar→bn), at least 2 per direction where possible
+- [ ] 7.3 Write and run the import/aggregation script; verify `poc/reports/review.md` shows per-direction acceptable rate, mean adequacy/fluency, standard-Arabic share and reviewer disagreement
+- [x] 7.4 Carry category/accent/noise into the review key (not the sheets) and report the end-to-end acceptable rate per slice (criteria C9, C10); verify a test checks per-category counts with failed turns counted as not acceptable, and that slice labels never appear on reviewer sheets
 
 ## 8. Device TTS check
 

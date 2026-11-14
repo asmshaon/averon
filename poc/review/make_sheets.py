@@ -19,14 +19,14 @@ import secrets
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DIRS = {"bn-BD>ar-SA": "bn2ar", "ar-SA>bn-BD": "ar2bn"}
+DIRS = {"bn-BD>ar": "bn2ar", "ar>bn-BD": "ar2bn"}
 SCORE_COLS = ["adequacy_1to5", "fluency_1to5", "acceptable_Y_N"]
 
 
 def sheet_columns(direction: str) -> list[str]:
     cols = ["row_id", "source_text", "translation", *SCORE_COLS]
-    if direction == "bn-BD>ar-SA":
-        cols.append("sounds_saudi_Y_N")
+    if direction == "bn-BD>ar":
+        cols.append("standard_arabic_Y_N")
     return cols + ["comment"]
 
 
@@ -68,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
                 n = 0
                 for r in subset:
                     entry = {"sheet": name, "direction": direction, "kind": kind, "utterance_id": r["id"],
+                             "category": r.get("category"), "accent": r.get("accent"), "noise": r.get("noise"),
                              "stt_model": r.get("stt_model"), "llm_model": r.get("llm_model"),
                              "variant": r.get("variant"), "prompt_version": (r.get("models") or {}).get("prompt_version"),
                              "status": r["status"], "error_code": r.get("error_code"),
