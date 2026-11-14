@@ -38,3 +38,17 @@ def test_clean_logs_pass_and_leaky_logs_fail_in_summary():
     # the stderr itself is never stored in the row
     assert all(RESULT["transcription"] not in str(v) for k, v in leaky.items()
                if k not in ("transcription", "reference_transcript"))
+
+
+def test_dialect_variant_only_reaches_bn_to_ar():
+    ar_entry = dict(ENTRY, id="ar2bn-001", direction="ar-SA>bn-BD")
+    assert run_bench.dialect_for(ENTRY, "Use Hijazi.") == "Use Hijazi."
+    assert run_bench.dialect_for(ar_entry, "Use Hijazi.") is None
+    assert run_bench.dialect_for(ENTRY, None) is None
+
+
+def test_variants_file_is_valid():
+    import json
+    from pathlib import Path
+    v = json.loads((Path(run_bench.__file__).parent / "dialect-variants.json").read_text(encoding="utf-8"))
+    assert v["default"] is None and all(isinstance(x, str) and "فصحى" in x for k, x in v.items() if k != "default")
