@@ -24,9 +24,12 @@ Model weights live outside the repo in `${MODELS_DIR}` (VPS: `/opt/averon/models
 | Start the stack | `cd deploy && cp .env.example .env && docker compose up -d --wait` |
 | One turn | `docker compose exec -T ai-runner python run_turn.py --turn-id t1 --audio /data/audio/x.m4a --source bn-BD --target ar-SA` (or `--text "..."`) |
 | Crash test | `deploy/crash-service.sh whisper\|llama` (SIGKILL inside the container. `docker kill` counts as a manual stop and does not test the restart policy) |
+| Build manifest | `python3 poc/testset/build_manifest.py --recordings recordings.csv` (`--plan FILE --speakers bn:spk01,ar:spk02` for a blank sheet). Drafts never become references |
 | Validate test set | `python3 poc/testset/validate_manifest.py poc/testset/manifest.jsonl [--audio-dir /opt/averon/poc-data/audio]` |
 | Benchmark | `poc/.venv/bin/python poc/bench/run_bench.py stt\|mt\|e2e ...` (see its `--help`) |
 | TTS check app | `cd poc/tts-check && npm ci && npx tsc --noEmit && npx expo start` |
+
+The full VPS sequence for finishing Week 1 is in `poc/RUNBOOK.md`.
 
 Gotchas: whisper-server and llama-server reject `--flag=value`, so put the flag and its value in separate compose `command` items. Docker Desktop on Linux can only mount paths under `$HOME`.
 

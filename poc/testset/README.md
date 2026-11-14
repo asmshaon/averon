@@ -9,7 +9,7 @@ There are 104 scripted prompts: 52 per direction, 8 per required category plus 4
 
 `draft_translation` was **written by an AI and is not a reference**. `reference_translation` stays empty until a native speaker of the target language writes or approves it. Then set `review_status` to `approved`. Reviewers should rewrite freely rather than just accept the draft, because references from an AI would bias chrF toward the LLM output being scored. The Saudi Arabic prompts also need a Saudi speaker to confirm they sound natural before anyone records them.
 
-Once recordings exist, each recording becomes one entry in `manifest.jsonl`. It copies the prompt's text fields and adds `speaker`, `accent`, `noise` and `audio`. If several speakers read the same prompt, give each recording a suffix on the ID, e.g. `bn2ar-001-spk03`.
+Once recordings exist, `build_manifest.py` turns the prompt list plus a recordings sheet (`prompt_id, speaker, accent, noise, audio`) into `manifest.jsonl`. `build_manifest.py --plan FILE --speakers bn:spk01,ar:spk02` writes a blank sheet. Each recording becomes one entry in `manifest.jsonl`. It copies the prompt's text fields and adds `speaker`, `accent`, `noise` and `audio`. The builder adds the speaker to the ID (`bn2ar-001-spk03`), so several speakers can read the same prompt.
 
 ## Entry fields
 

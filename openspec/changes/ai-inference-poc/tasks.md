@@ -29,6 +29,7 @@
 - [ ] 4.1 Write the scripted prompt list (≥50 per direction) covering every PRD category, with reference transcripts and native-speaker reference translations, in `poc/testset/manifest.jsonl`; verify it has an entry per required category
 - [x] 4.2 Write `poc/testset/validate_manifest.py` (counts, per-direction minimum, category coverage, references present, audio exists, duration ≤ 30 s via ffprobe); verify it fails on a deliberately broken manifest and passes on the real one
 - [ ] 4.3 Collect consented phone recordings from multiple accents/speakers, including noisy clips, into `/opt/averon/poc-data/audio`; verify `validate_manifest.py` passes against the recordings
+- [x] 4.4 Write `poc/testset/build_manifest.py` (prompt list + recordings sheet → manifest, one entry per recording, refuses prompts without an approved native-speaker reference, `--plan` writes a blank per-language recording sheet); verify tests show AI drafts are rejected and a full build passes `validate_manifest.py`
 
 ## 5. Benchmark harness
 
@@ -37,6 +38,8 @@
 - [x] 5.3 Write `poc/bench/run_bench.py` with `stt`, `mt` and `e2e` modes (design D7): sequential, swaps models via env plus service restart, writes per-utterance JSONL and a summary (latency per stage, success rate, error counts, peak RAM, external-call count); verify a 5-utterance dry run produces both files
 - [x] 5.4 Add a fault-injection step to the e2e mode (kill a service mid-run); verify the affected turns report `*_unavailable`/`*_timeout` with `retryable: true` and the run continues after the restart
 - [x] 5.5 Capture the runner's stderr in the harness (scanned, never stored) and count transcript/translation text found in it per run (criterion C11); verify a test fails the summary when a fake runner logs a transcript
+- [x] 5.6 MT sweep: send `--dialect` variants to bn→ar only (ar→bn has no dialect slot), add `poc/bench/dialect-variants.json`, and add `--report-name` to write each sweep summary to `poc/reports/`; verify tests cover the direction guard and the variants file
+- [x] 5.7 Write `poc/RUNBOOK.md`: the ordered VPS and people steps for sections 2–9 with exact commands; verify every command and path in it matches the scripts' arguments
 
 ## 6. Run evaluation on the VPS
 
