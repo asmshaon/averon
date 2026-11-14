@@ -65,7 +65,7 @@ def build(prompts: dict[str, dict], recordings: list[dict]) -> tuple[list[dict],
     return entries, problems
 
 
-SPEAKER_LANG = {"bn": "bn-BD", "ar": "ar-SA"}
+SPEAKER_LANG = {"bn": "bn-BD", "ar": "ar"}
 
 
 def write_plan(prompts: dict[str, dict], speakers: list[tuple[str, str]], out: Path) -> int:

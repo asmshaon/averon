@@ -1,6 +1,6 @@
 import time
 
-ARGS = ["--turn-id", "a1", "--source", "bn-BD", "--target", "ar-SA"]
+ARGS = ["--turn-id", "a1", "--source", "bn-BD", "--target", "ar"]
 
 
 def test_valid_m4a_completes(env, run, clips, whisper, llama):

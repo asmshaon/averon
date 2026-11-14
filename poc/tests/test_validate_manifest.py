@@ -8,8 +8,8 @@ import validate_manifest as vm
 
 def _entries(n_per_dir=50):
     out = []
-    for d, tags, accents in (("bn-BD>ar-SA", ["formal", "informal"], ["dhaka", "sylhet"]),
-                             ("ar-SA>bn-BD", ["saudi_colloquial"], ["najdi", "hijazi"])):
+    for d, tags, accents in (("bn-BD>ar", ["formal", "informal"], ["dhaka", "sylhet"]),
+                             ("ar>bn-BD", ["msa", "dialect"], ["egyptian", "gulf"])):
         for i in range(n_per_dir):
             out.append({
                 "id": f"{d[:2]}-{i:03d}", "direction": d,
@@ -34,13 +34,15 @@ def test_valid_manifest_passes(tmp_path):
 @pytest.mark.parametrize("breaker,needle", [
     (lambda es: es[:-1], "only 49 entries"),
     (lambda es: es + [dict(es[0])], "duplicate id"),
-    (lambda es: [dict(e, category="general") if e["direction"] == "bn-BD>ar-SA" and e["category"] == "shopping"
+    (lambda es: [dict(e, category="general") if e["direction"] == "bn-BD>ar" and e["category"] == "shopping"
                  else e for e in es], "no entry for category 'shopping'"),
-    (lambda es: [dict(e, tags=[]) if e["direction"] == "ar-SA>bn-BD" else e for e in es],
-     "no entry tagged 'saudi_colloquial'"),
-    (lambda es: [dict(e, tags=["formal"]) if e["direction"] == "bn-BD>ar-SA" else e for e in es],
+    (lambda es: [dict(e, tags=["msa"]) if e["direction"] == "ar>bn-BD" else e for e in es],
+     "no entry tagged 'dialect'"),
+    (lambda es: [dict(e, tags=["dialect"]) if e["direction"] == "ar>bn-BD" else e for e in es],
+     "no entry tagged 'msa'"),
+    (lambda es: [dict(e, tags=["formal"]) if e["direction"] == "bn-BD>ar" else e for e in es],
      "no entry tagged 'informal'"),
-    (lambda es: [dict(e, accent="dhaka") if e["direction"] == "bn-BD>ar-SA" else e for e in es],
+    (lambda es: [dict(e, accent="dhaka") if e["direction"] == "bn-BD>ar" else e for e in es],
      "fewer than 2 accents"),
     (lambda es: [dict(e, noise=False) for e in es], "no noisy clip"),
     (lambda es: [dict(es[0], reference_translation=" ")] + es[1:], "empty reference_translation"),

@@ -38,7 +38,7 @@ def test_full_build_passes_validator(tmp_path):
     rows = []
     for i, pid in enumerate(PROMPTS):
         bn = pid.startswith("bn2ar")
-        accent = ("dhaka" if i % 2 else "sylhet") if bn else ("najdi" if i % 2 else "hijazi")
+        accent = ("dhaka" if i % 2 else "sylhet") if bn else ("egyptian" if i % 2 else "gulf")
         rows.append([pid, "spk01" if bn else "spk02", accent, "yes" if i % 10 == 0 else "no", f"{pid}.m4a"])
     rows.append(["bn2ar-001", "spk03", "chittagong", "no", "bn2ar-001-b.m4a"])  # second speaker, same prompt
     rec = tmp_path / "r.csv"

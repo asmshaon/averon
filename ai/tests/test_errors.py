@@ -37,7 +37,7 @@ def test_unexpected_exception_still_emits_json(env, run, monkeypatch):
         raise RuntimeError("secret user text must not leak")
 
     monkeypatch.setattr(cli.prompts, "load", boom)
-    code, res, err = run("--turn-id", "t", "--text", "x", "--source", "bn-BD", "--target", "ar-SA")
+    code, res, err = run("--turn-id", "t", "--text", "x", "--source", "bn-BD", "--target", "ar")
     assert code == 3
     assert res["error_code"] == "internal_error"
     assert "secret user text" not in err

@@ -9,8 +9,8 @@ Paths assume the repo is checked out on the VPS, for example at `/opt/averon/app
 | Task | What | Who |
 |---|---|---|
 | 6.1 | Fill in the latency line, confirm the thresholds and sign `poc/reports/criteria.md`. Do this **before** any sheet goes out | Owner |
-| 3.5 | Check the 5 few-shot examples in `ai/averon_ai/prompts/bn-BD__ar-SA.json`, then set `review_status` to `approved` | Saudi speaker |
-| 4.1 | In `poc/testset/prompts.draft.jsonl`, write or correct each `reference_translation` and set `review_status: "approved"`. The ar→bn source sentences also need a Saudi check | Saudi + Bangla speakers |
+| 3.5 | Check the 5 few-shot examples in `ai/averon_ai/prompts/bn-BD__ar.json`, then set `review_status` to `approved` | Native Arabic speaker |
+| 4.1 | In `poc/testset/prompts.draft.jsonl`, write or correct each `reference_translation` and set `review_status: "approved"`. The ar→bn source sentences also need checking: MSA ones for correctness, dialect ones by a speaker of that dialect | Arabic (Gulf, Egyptian, Levantine) + Bangla speakers |
 | 4.3 | Record every prompt on a phone (m4a), with several speakers and accents and some noisy clips. Get consent | Speakers |
 
 Make the recording sheet:
@@ -55,8 +55,8 @@ Then from **another machine**: `nmap -Pn -p 1-65535 <vps-public-ip>`. Neither th
 
 For 3.9, copy one real Bangla clip and one real Arabic clip into `/opt/averon/poc-data/audio`, then run:
 ```bash
-docker compose exec -T ai-runner python run_turn.py --turn-id t1 --audio /data/audio/<bn>.m4a --source bn-BD --target ar-SA; echo "exit=$?"
-docker compose exec -T ai-runner python run_turn.py --turn-id t2 --audio /data/audio/<ar>.m4a --source ar-SA --target bn-BD; echo "exit=$?"
+docker compose exec -T ai-runner python run_turn.py --turn-id t1 --audio /data/audio/<bn>.m4a --source bn-BD --target ar; echo "exit=$?"
+docker compose exec -T ai-runner python run_turn.py --turn-id t2 --audio /data/audio/<ar>.m4a --source ar --target bn-BD; echo "exit=$?"
 ```
 Both must give `status: completed` and `exit=0`.
 
@@ -96,7 +96,7 @@ Before step 6, check that `poc/reports/e2e.md` shows combined peak RAM within bu
 ```bash
 python3 poc/review/make_sheets.py --e2e poc/bench/results/<e2e-run>/results.jsonl --mt poc/bench/results/<mt-run>/results.jsonl
 ```
-Send `bn2ar__*.csv` to Saudi reviewers and `ar2bn__*.csv` to Bangla reviewers, at least 2 per direction. Never send `poc/review/keys/`. Save each completed sheet as `<sheet>__<reviewer>.csv`, then:
+Send `bn2ar__*.csv` to native Arabic reviewers and `ar2bn__*.csv` to Bangla reviewers, at least 2 per direction. Never send `poc/review/keys/`. Save each completed sheet as `<sheet>__<reviewer>.csv`, then:
 ```bash
 python3 poc/review/import_reviews.py completed/*.csv
 ```

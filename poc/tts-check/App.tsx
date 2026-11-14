@@ -7,11 +7,11 @@ import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from '
 
 import data from './samples.json';
 
-type Lang = 'ar-SA' | 'bn-BD';
+type Lang = 'ar' | 'bn-BD';
 type Sample = { id: string; language: Lang; text: string };
 
 const LANGS: { code: Lang; prefix: string; label: string }[] = [
-  { code: 'ar-SA', prefix: 'ar', label: 'Arabic (target ar-SA)' },
+  { code: 'ar', prefix: 'ar', label: 'Arabic (target ar)' },
   { code: 'bn-BD', prefix: 'bn', label: 'Bangla (target bn-BD)' },
 ];
 
@@ -32,7 +32,7 @@ export default function App() {
     Speech.getAvailableVoicesAsync()
       .then((all) => {
         setVoices(all);
-        // Prefer an exact locale match (ar-SA / bn-BD), then any voice of that language.
+        // Prefer an exact locale match (bn-BD), then any voice of that language. Any Arabic locale counts.
         const initial: Partial<Record<Lang, string>> = {};
         for (const l of LANGS) {
           const own = all.filter((v) => matches(v, l.prefix));
@@ -48,7 +48,7 @@ export default function App() {
   }, []);
 
   const byLang = useMemo(() => {
-    const out: Record<Lang, Speech.Voice[]> = { 'ar-SA': [], 'bn-BD': [] };
+    const out: Record<Lang, Speech.Voice[]> = { 'ar': [], 'bn-BD': [] };
     for (const l of LANGS) out[l.code] = (voices ?? []).filter((v) => matches(v, l.prefix));
     return out;
   }, [voices]);
@@ -106,7 +106,6 @@ export default function App() {
             ) : null}
             {byLang[l.code].map((v) => {
               const active = selected[l.code] === v.identifier;
-              const saudi = v.language.replace('_', '-').toLowerCase() === 'ar-sa';
               return (
                 <Pressable
                   key={v.identifier}
@@ -115,7 +114,7 @@ export default function App() {
                 >
                   <Text style={styles.voiceName}>
                     {active ? '● ' : '○ '}
-                    {v.name} {saudi ? '· Saudi locale' : ''}
+                    {v.name}
                   </Text>
                   <Text style={styles.voiceMeta}>
                     {v.language} · {v.quality} · {v.identifier}
@@ -132,7 +131,7 @@ export default function App() {
             const hasVoice = Boolean(selected[s.language]);
             return (
               <View key={s.id} style={styles.sample}>
-                <Text style={[styles.sampleText, s.language === 'ar-SA' && styles.rtl]}>{s.text}</Text>
+                <Text style={[styles.sampleText, s.language === 'ar' && styles.rtl]}>{s.text}</Text>
                 <View style={styles.row}>
                   <Text style={styles.voiceMeta}>
                     {s.id} · {s.language}

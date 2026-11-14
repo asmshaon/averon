@@ -4,14 +4,14 @@ BASE = ["--turn-id", "t1"]
 
 
 @pytest.mark.parametrize("argv", [
-    BASE + ["--text", "hi", "--source", "en-US", "--target", "ar-SA"],
+    BASE + ["--text", "hi", "--source", "en-US", "--target", "ar"],
     BASE + ["--text", "hi", "--source", "bn-BD", "--target", "ar-EG"],
     BASE + ["--text", "hi", "--source", "bn-BD", "--target", "bn-BD"],
-    BASE + ["--text", "hi", "--audio", "/x.wav", "--source", "bn-BD", "--target", "ar-SA"],
-    BASE + ["--source", "bn-BD", "--target", "ar-SA"],
-    ["--text", "hi", "--source", "bn-BD", "--target", "ar-SA"],
-    BASE + ["--text", "   ", "--source", "bn-BD", "--target", "ar-SA"],
-    BASE + ["--text", "hi", "--source", "bn-BD", "--target", "ar-SA", "--stt-timeout", "abc"],
+    BASE + ["--text", "hi", "--audio", "/x.wav", "--source", "bn-BD", "--target", "ar"],
+    BASE + ["--source", "bn-BD", "--target", "ar"],
+    ["--text", "hi", "--source", "bn-BD", "--target", "ar"],
+    BASE + ["--text", "   ", "--source", "bn-BD", "--target", "ar"],
+    BASE + ["--text", "hi", "--source", "bn-BD", "--target", "ar", "--stt-timeout", "abc"],
 ])
 def test_invalid_arguments(env, run, whisper, llama, argv):
     code, res, _ = run(*argv)
