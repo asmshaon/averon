@@ -7,7 +7,7 @@ import make_sheets
 
 def _results(tmp_path, kind, n=6):
     rows = []
-    for d in ("bn-BD>ar-SA", "ar-SA>bn-BD"):
+    for d in ("bn-BD>ar", "ar>bn-BD"):
         for i in range(n):
             failed = i == n - 1
             rows.append({
@@ -15,7 +15,7 @@ def _results(tmp_path, kind, n=6):
                 "error_code": "stt_timeout" if failed else None,
                 "reference_transcript": f"src {d[:2]} {i}", "translation": None if failed else f"out {d[:2]} {i}",
                 "stt_model": "whisper-secret-model" if kind == "e2e" else None, "llm_model": "llm-secret-model",
-                "variant": "default", "models": {"prompt_version": "bn-BD__ar-SA@v1"},
+                "variant": "default", "models": {"prompt_version": "bn-BD__ar@v1"},
                 "category": "numbers_prices_dates" if i < 3 else "greetings",
                 "accent": "dhaka" if i % 2 == 0 else "sylhet", "noise": i == 0,
             })
@@ -35,8 +35,8 @@ def test_sheets_are_blind_and_shuffled(tmp_path):
         assert "secret-model" not in text and "@v1" not in text
         assert "bn-" not in text.split("\n", 1)[1].split(",")[0]  # row ids don't leak utterance ids
     header = (out / "bn2ar__e2e.csv").read_text(encoding="utf-8-sig").splitlines()[0]
-    assert "sounds_saudi_Y_N" in header
-    assert "sounds_saudi_Y_N" not in (out / "ar2bn__e2e.csv").read_text(encoding="utf-8-sig").splitlines()[0]
+    assert "standard_arabic_Y_N" in header
+    assert "standard_arabic_Y_N" not in (out / "ar2bn__e2e.csv").read_text(encoding="utf-8-sig").splitlines()[0]
     rows = list(csv.DictReader((out / "bn2ar__e2e.csv").open(encoding="utf-8-sig")))
     assert len(rows) == 5  # failed turn not on sheet
     assert [r["source_text"] for r in rows] != sorted(r["source_text"] for r in rows)  # shuffled
@@ -44,15 +44,15 @@ def test_sheets_are_blind_and_shuffled(tmp_path):
     assert sum(1 for k in key if k["row_id"] is None) == 4
 
 
-def _fill(src, dst, acceptable, saudi="Y"):
+def _fill(src, dst, acceptable, msa="Y"):
     rows = list(csv.DictReader(src.open(encoding="utf-8-sig")))
     with dst.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         for i, r in enumerate(rows):
             r.update(adequacy_1to5="4", fluency_1to5="5", acceptable_Y_N=acceptable(i))
-            if "sounds_saudi_Y_N" in r:
-                r["sounds_saudi_Y_N"] = saudi
+            if "standard_arabic_Y_N" in r:
+                r["standard_arabic_Y_N"] = msa
             w.writerow(r)
 
 
@@ -72,7 +72,7 @@ def test_aggregation(tmp_path):
     assert g["utterances"] == 6 and g["failed_turns"] == 1 and g["reviewed"] == 5
     # 4 unanimous Y; 1 tie (Y/N) -> not acceptable; failed turn -> not acceptable => 4/6
     assert abs(g["acceptable_rate"] - 4 / 6) < 1e-9
-    assert g["sounds_saudi_rate"] == 1.0
+    assert g["standard_arabic_rate"] == 1.0
     assert abs(g["reviewer_disagreement_rate"] - 1 / 5) < 1e-9
     assert g["reviewers"] == ["revA", "revB"]
     assert "bn2ar__e2e" in (reports / "review.md").read_text()

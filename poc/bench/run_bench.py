@@ -33,7 +33,7 @@ import metrics  # noqa: E402
 from profile import Profiler  # noqa: E402
 
 DEPLOY = REPO / "deploy"
-LANG_OF = {"bn-BD>ar-SA": ("bn-BD", "ar-SA"), "ar-SA>bn-BD": ("ar-SA", "bn-BD")}
+LANG_OF = {"bn-BD>ar": ("bn-BD", "ar"), "ar>bn-BD": ("ar", "bn-BD")}
 
 
 # --------------------------------------------------------------------------- docker helpers
@@ -175,8 +175,8 @@ def log_leaks(stderr: str, texts: list[str | None]) -> int:
 
 
 def dialect_for(e: dict, dialect: str | None) -> str | None:
-    """`--dialect` replaces the Saudi instruction in the bn→ar prompt; never send it to the ar→bn prompt."""
-    return dialect if e["direction"] == "bn-BD>ar-SA" else None
+    """`--dialect` replaces the Arabic register instruction in the bn→ar prompt; never send it to the ar→bn prompt."""
+    return dialect if e["direction"] == "bn-BD>ar" else None
 
 
 def run_stt(stack: Stack, e: dict, audio_root: str, timeout: float) -> dict:
@@ -240,6 +240,12 @@ def _lat(rows: list[dict], key: str) -> dict:
             "max": max(xs) if xs else None}
 
 
+def register_of(row: dict) -> str | None:
+    """Arabic speech register from the manifest tags (`msa` / `dialect`); None for Bangla."""
+    tags = set(row.get("tags") or [])
+    return "msa" if "msa" in tags else "dialect" if "dialect" in tags else None
+
+
 def _quality(rows: list[dict]) -> dict:
     out: dict = {}
     by_lang: dict[str, list[dict]] = defaultdict(list)
@@ -250,10 +256,12 @@ def _quality(rows: list[dict]) -> dict:
         q = {"n_scored": len(scored),
              "cer_mean": metrics.mean([r["cer"] for r in scored]),
              "wer_mean": metrics.mean([r["wer"] for r in scored])}
-        for dim in ("accent", "noise"):
+        for dim in ("accent", "noise", "register"):
             groups: dict[str, list[dict]] = defaultdict(list)
             for r in scored:
-                groups[str(r[dim])].append(r)
+                g = register_of(r) if dim == "register" else str(r[dim])
+                if g is not None:
+                    groups[g].append(r)
             q[f"by_{dim}"] = {g: {"n": len(v), "cer_mean": metrics.mean([x["cer"] for x in v]),
                                   "wer_mean": metrics.mean([x["wer"] for x in v])} for g, v in sorted(groups.items())}
         out[lang] = q
@@ -336,7 +344,7 @@ def summary_markdown(summaries: list[dict], reserve_note: str) -> str:
             out.append("|---|---|---|---|")
             for lang, q in s["stt_quality"].items():
                 out.append(f"| {lang} | {q['n_scored']} | {_fmt(q['cer_mean'], 3)} | {_fmt(q['wer_mean'], 3)} |")
-                for dim in ("by_accent", "by_noise"):
+                for dim in ("by_accent", "by_noise", "by_register"):
                     for g, v in q[dim].items():
                         out.append(f"| ↳ {dim[3:]}={g} | {v['n']} | {_fmt(v['cer_mean'], 3)} | "
                                    f"{_fmt(v['wer_mean'], 3)} |")
@@ -426,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
                 for vname, dialect in variants.items():
                     # A dialect instruction only exists for the Arabic target (bn→ar). Non-default variants
                     # therefore run bn→ar only; ar→bn would just repeat the default prompt.
-                    v_items = items if dialect is None else [e for e in items if e["direction"] == "bn-BD>ar-SA"]
+                    v_items = items if dialect is None else [e for e in items if e["direction"] == "bn-BD>ar"]
                     rows = []
                     with Profiler({"llama": stack.container("llama")}) as prof:
                         for e in v_items:

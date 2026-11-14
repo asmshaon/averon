@@ -17,7 +17,7 @@ Source: design D8, plus additions marked *(new)*. Each line is checked in `go-no
 |---|---|---|---|---|
 | C1 | End-to-end acceptable, **bn→ar** | ≥ 80% | quality | `review.md` (bn2ar e2e) |
 | C2 | End-to-end acceptable, **ar→bn** | ≥ 80% | quality | `review.md` (ar2bn e2e) |
-| C3 | bn→ar outputs rated "sounds Saudi" | ≥ 70% | quality | `review.md` |
+| C3 | bn→ar outputs rated "standard Arabic" (MSA, no dialect forms or broken mix) | ≥ 85% | quality | `review.md` |
 | C4 | Reliability: valid-audio turns that complete without a timeout or internal error | ≥ 98% | hard | `e2e.md` |
 | C5 | Memory: OOM kills, and combined inference peak against the D3 budget (adjusted by `baseline.md`) | 0 OOM; within budget | hard | `e2e.md`, `baseline.md` |
 | C6 | Cost: external API calls and estimated charges | 0 and 0 | hard | `e2e.md` |
@@ -56,7 +56,7 @@ After the run, the report proposes a backend-phase target based on the measured 
 These are recorded to inform later weeks, but they don't decide go/no-go:
 - **STT CER/WER**: used to diagnose whether failures come from speech recognition or translation.
 - **Reference-transcript sheets**: diagnostic, as above.
-- **Device TTS**: a missing or non-Saudi voice is handled by always showing the text (PRD). The findings feed the Week 3 app.
+- **Device TTS**: a missing Arabic or Bangla voice is handled by always showing the text (PRD). The findings feed the Week 3 app.
 - **Reviewer disagreement rate**: reported, and above ~25% it means "acceptable" needs clarifying with the reviewers.
 
 ---

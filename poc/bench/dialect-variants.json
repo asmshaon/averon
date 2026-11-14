@@ -1,5 +1,5 @@
 {
   "default": null,
-  "saudi-strict": "Use natural spoken Saudi Arabic exactly as people in Riyadh talk day to day. Never use Modern Standard Arabic (فصحى) forms such as ماذا، أريد، الآن، جيد، لماذا: say وش، أبغى، الحين، زين، ليش instead.",
-  "hijazi": "Use natural spoken Saudi Arabic as people in Jeddah (Hijazi dialect) talk day to day, not Modern Standard Arabic (فصحى)."
+  "msa-strict": "Use correct, formal Modern Standard Arabic (فصحى) only. Never use dialect words such as وش، أبغى، الحين، عايز، بدي، زين.",
+  "msa-simple": "Use very simple, short Modern Standard Arabic (فصحى) that a non-native listener can follow: common words, short sentences, no dialect words."
 }

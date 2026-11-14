@@ -10,7 +10,7 @@ npx expo start            # scan the QR code with Expo Go on the Android / iOS t
 ```
 
 On each device:
-1. Note the voices listed under Arabic and Bangla. "Saudi locale" marks an `ar-SA` voice.
+1. Note the voices listed under Arabic and Bangla, with each voice's locale (e.g. `ar-SA`, `ar-EG`). Any Arabic locale is acceptable.
 2. Have a native listener play the samples and judge intelligibility and accent.
 3. Tap **Share voice report** and paste the JSON plus the verdict into `poc/reports/tts.md`.
 

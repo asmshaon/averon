@@ -2,7 +2,7 @@
 
 import run_bench
 
-ENTRY = {"id": "bn2ar-001", "direction": "bn-BD>ar-SA", "category": "greetings", "accent": "dhaka",
+ENTRY = {"id": "bn2ar-001", "direction": "bn-BD>ar", "category": "greetings", "accent": "dhaka",
          "noise": False, "audio": "x.m4a", "reference_transcript": "আসসালামু আলাইকুম, কেমন আছেন?",
          "reference_translation": "السلام عليكم، كيف حالك؟"}
 
@@ -41,9 +41,9 @@ def test_clean_logs_pass_and_leaky_logs_fail_in_summary():
 
 
 def test_dialect_variant_only_reaches_bn_to_ar():
-    ar_entry = dict(ENTRY, id="ar2bn-001", direction="ar-SA>bn-BD")
-    assert run_bench.dialect_for(ENTRY, "Use Hijazi.") == "Use Hijazi."
-    assert run_bench.dialect_for(ar_entry, "Use Hijazi.") is None
+    ar_entry = dict(ENTRY, id="ar2bn-001", direction="ar>bn-BD")
+    assert run_bench.dialect_for(ENTRY, "Use simple MSA.") == "Use simple MSA."
+    assert run_bench.dialect_for(ar_entry, "Use simple MSA.") is None
     assert run_bench.dialect_for(ENTRY, None) is None
 
 
@@ -52,3 +52,19 @@ def test_variants_file_is_valid():
     from pathlib import Path
     v = json.loads((Path(run_bench.__file__).parent / "dialect-variants.json").read_text(encoding="utf-8"))
     assert v["default"] is None and all(isinstance(x, str) and "فصحى" in x for k, x in v.items() if k != "default")
+
+
+def test_arabic_cer_split_by_register():
+    def row(i, reg):
+        return dict(run_bench.base_row(dict(ENTRY, id=f"ar2bn-{i}", direction="ar>bn-BD", tags=[reg]), "stt"),
+                    status="completed", cer=0.1 if reg == "msa" else 0.3, wer=0.2)
+    rows = [row(1, "msa"), row(2, "msa"), row(3, "dialect")]
+    q = run_bench._quality(rows)["ar"]
+    assert q["by_register"]["msa"]["n"] == 2 and abs(q["by_register"]["dialect"]["cer_mean"] - 0.3) < 1e-9
+    bn = run_bench._quality([dict(run_bench.base_row(ENTRY, "stt"), status="completed", cer=0.1, wer=0.1)])
+    assert bn["bn-BD"]["by_register"] == {}
+    md = run_bench.summary_markdown([{"mode": "stt", "stt_model": "s", "utterances": 3, "completed": 3,
+                                      "success_rate": 1.0, "error_counts": {}, "external_api_calls": 0,
+                                      "estimated_cost": 0, "latency_ms": {}, "resources": {},
+                                      "stt_quality": run_bench._quality(rows)}], "")
+    assert "register=dialect" in md

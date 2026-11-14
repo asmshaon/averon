@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-SUPPORTED_LANGUAGES = ("bn-BD", "ar-SA")
+SUPPORTED_LANGUAGES = ("bn-BD", "ar")
 # Whisper language codes. Always forced, never auto-detected (design D4).
-WHISPER_LANGUAGE = {"bn-BD": "bn", "ar-SA": "ar"}
+WHISPER_LANGUAGE = {"bn-BD": "bn", "ar": "ar"}
 MAX_AUDIO_SECONDS = 30.0
 
 

@@ -1,6 +1,6 @@
 from conftest import AR_TRANSLATION, BN_TRANSCRIPT
 
-ARGS = ["--turn-id", "u1", "--source", "bn-BD", "--target", "ar-SA"]
+ARGS = ["--turn-id", "u1", "--source", "bn-BD", "--target", "ar"]
 REQUIRED_KEYS = {
     "turn_id", "status", "source_language", "target_language", "transcription", "translation",
     "models", "timings_ms", "audio_duration_seconds", "error_code", "retryable", "usage",
